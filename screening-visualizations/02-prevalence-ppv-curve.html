@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Prevalence Rules PPV — the Predictive-Value Curve</title>
+<style>
+  :root{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.12);
+    --ppv:#2a78d6; --npv:#1baf7a; --ppv2:#4a3aa7;
+    --accent:#2a78d6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+      --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.14);
+      --ppv:#3987e5; --npv:#199e70; --ppv2:#9085e9;
+      --accent:#3987e5;
+    }
+  }
+  :root[data-theme="light"]{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.12);
+    --ppv:#2a78d6; --npv:#1baf7a; --ppv2:#4a3aa7; --accent:#2a78d6;
+  }
+  :root[data-theme="dark"]{
+    --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.14);
+    --ppv:#3987e5; --npv:#199e70; --ppv2:#9085e9; --accent:#3987e5;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 18px 48px}
+  header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.4rem;margin:.1rem 0 .2rem;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:.95rem;margin:0;max-width:70ch}
+  .themebtn{border:1px solid var(--border);background:var(--panel);color:var(--ink2);border-radius:999px;padding:6px 12px;font:inherit;font-size:.82rem;cursor:pointer}
+  .themebtn:hover{color:var(--ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-top:16px}
+
+  .sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .slider label{display:flex;justify-content:space-between;align-items:baseline;font-size:.85rem;font-weight:600;color:var(--ink2);margin-bottom:6px}
+  .slider label .val{font-size:1.05rem;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  @media (max-width:720px){ .sliders{grid-template-columns:1fr} }
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  .btn{border:1px solid var(--border);background:var(--accent);color:#fff;border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:.84rem;cursor:pointer}
+  .btn.ghost{background:var(--panel);color:var(--ink2)}
+  .btn.ghost:hover{color:var(--ink)}
+  .btn:hover{filter:brightness(1.05)}
+  .pl{font-size:.82rem;color:var(--muted)}
+  .toggle{display:inline-flex;align-items:center;gap:8px;font-size:.86rem;color:var(--ink2);cursor:pointer;user-select:none}
+  .toggle input{width:16px;height:16px;accent-color:var(--ppv2)}
+
+  .chartcard{padding:14px 12px 8px}
+  svg{display:block;width:100%;height:auto;touch-action:none}
+  .gridline{stroke:var(--grid);stroke-width:1}
+  .axisline{stroke:var(--axis);stroke-width:1.5}
+  .tick{fill:var(--muted);font-size:11px}
+  .axtitle{fill:var(--ink2);font-size:12px;font-weight:600}
+  .curve{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+  .curve.ppv{stroke:var(--ppv)} .curve.npv{stroke:var(--npv)} .curve.ppv2{stroke:var(--ppv2);stroke-dasharray:6 4}
+  .marker{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 3;opacity:.6}
+  .mdot{stroke:var(--surface);stroke-width:2}
+  .mdot.ppv{fill:var(--ppv)} .mdot.npv{fill:var(--npv)} .mdot.ppv2{fill:var(--ppv2)}
+  .grabzone{fill:transparent;cursor:ew-resize}
+  .clabel{font-size:12px;font-weight:700}
+  .clabel.ppv{fill:var(--ppv)} .clabel.npv{fill:var(--npv)} .clabel.ppv2{fill:var(--ppv2)}
+
+  .readout{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;padding:0 4px}
+  .chip{display:flex;align-items:center;gap:8px;font-size:.86rem;color:var(--ink2)}
+  .chip .sw{width:13px;height:13px;border-radius:3px;flex:none}
+  .chip b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+  .banner{margin-top:16px;font-size:.94rem;color:var(--ink2);background:var(--panel);border-left:3px solid var(--ppv);padding:11px 14px;border-radius:0 8px 8px 0}
+  .banner b{color:var(--ink)} .banner .big{color:var(--ppv);font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Why Prevalence Rules PPV — the Predictive-Value Curve</h1>
+      <p class="sub">Sensitivity and specificity are fixed by the test. But <b>PPV</b> (chance of disease given a positive result) and <b>NPV</b> depend on <b>prevalence</b>. Drag the marker along the curve — and notice PPV lives on the steep, unforgiving part at low prevalence.</p>
+    </div>
+    <button class="themebtn" id="themeToggle" type="button">◐ Theme</button>
+  </header>
+
+  <section class="card">
+    <div class="sliders">
+      <div class="slider">
+        <label for="prev">Prevalence <span class="val" id="prevVal">10%</span></label>
+        <input type="range" id="prev" min="0.1" max="99.9" step="0.1" value="10">
+      </div>
+      <div class="slider">
+        <label for="sens">Sensitivity <span class="val" id="sensVal">90%</span></label>
+        <input type="range" id="sens" min="50" max="100" step="1" value="90">
+      </div>
+      <div class="slider">
+        <label for="spec">Specificity <span class="val" id="specVal">90%</span></label>
+        <input type="range" id="spec" min="50" max="100" step="1" value="90">
+      </div>
+    </div>
+    <div class="row">
+      <span class="pl">Jump to:</span>
+      <button class="btn" id="pLow" type="button">Blood bank — 0.5%</button>
+      <button class="btn" id="pMid" type="button">Screening — 5%</button>
+      <button class="btn" id="pHigh" type="button">High-risk clinic — 30%</button>
+      <label class="toggle"><input type="checkbox" id="overlay"> Add a more <b>&nbsp;specific</b> confirmatory test (99%)</label>
+    </div>
+  </section>
+
+  <section class="card chartcard">
+    <svg id="chart" viewBox="0 0 600 380" role="img" aria-label="Predictive value versus prevalence">
+      <g id="gGrid"></g>
+      <g id="gAxes"></g>
+      <path id="curvePPV2" class="curve ppv2" style="display:none"/>
+      <path id="curveNPV" class="curve npv"/>
+      <path id="curvePPV" class="curve ppv"/>
+      <g id="gLabels"></g>
+      <line id="mLine" class="marker"/>
+      <circle id="dotNPV" class="mdot npv" r="5"/>
+      <circle id="dotPPV2" class="mdot ppv2" r="5" style="display:none"/>
+      <circle id="dotPPV" class="mdot ppv" r="5.5"/>
+      <rect id="grab" class="grabzone" x="0" y="0" width="600" height="380"/>
+    </svg>
+    <div class="readout">
+      <span class="chip"><i class="sw" style="background:var(--ppv)"></i>PPV <b id="roPPV">50.0%</b></span>
+      <span class="chip" id="chipPPV2" style="display:none"><i class="sw" style="background:var(--ppv2)"></i>PPV (confirmatory) <b id="roPPV2">—</b></span>
+      <span class="chip"><i class="sw" style="background:var(--npv)"></i>NPV <b id="roNPV">98.8%</b></span>
+      <span class="chip" style="margin-left:auto">at prevalence <b id="roPrev">10.0%</b></span>
+    </div>
+  </section>
+
+  <p class="banner" id="banner"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement;
+  document.getElementById("themeToggle").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme");
+    var next=cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"light":"dark");
+    root.setAttribute("data-theme",next);
+  });
+
+  // geometry
+  var W=600,H=380, ml=48,mr=64,mt=18,mb=40;
+  var plotW=W-ml-mr, plotH=H-mt-mb;
+  function X(p){ return ml + p*plotW; }            // p in 0..1 (prevalence)
+  function Y(v){ return mt + (1-v)*plotH; }         // v in 0..1 (value)
+
+  var SPEC2=0.99; // confirmatory test specificity
+
+  function ppv(prev,se,sp){ var num=se*prev; var den=num+(1-sp)*(1-prev); return den? num/den : 0; }
+  function npv(prev,se,sp){ var num=sp*(1-prev); var den=num+(1-se)*prev; return den? num/den : 0; }
+
+  // static grid + axes
+  (function(){
+    var g=document.getElementById("gGrid"), a=document.getElementById("gAxes");
+    var svgns="http://www.w3.org/2000/svg";
+    [0,.25,.5,.75,1].forEach(function(t){
+      // horizontal gridlines (value)
+      var y=Y(t);
+      var l=document.createElementNS(svgns,"line");
+      l.setAttribute("class","gridline");l.setAttribute("x1",ml);l.setAttribute("x2",ml+plotW);l.setAttribute("y1",y);l.setAttribute("y2",y);
+      g.appendChild(l);
+      var ty=document.createElementNS(svgns,"text");
+      ty.setAttribute("class","tick");ty.setAttribute("x",ml-8);ty.setAttribute("y",y+4);ty.setAttribute("text-anchor","end");
+      ty.textContent=(t*100)+"%"; a.appendChild(ty);
+      // vertical gridlines (prevalence)
+      var x=X(t);
+      var vl=document.createElementNS(svgns,"line");
+      vl.setAttribute("class","gridline");vl.setAttribute("y1",mt);vl.setAttribute("y2",mt+plotH);vl.setAttribute("x1",x);vl.setAttribute("x2",x);
+      g.appendChild(vl);
+      var tx=document.createElementNS(svgns,"text");
+      tx.setAttribute("class","tick");tx.setAttribute("y",mt+plotH+18);tx.setAttribute("x",x);tx.setAttribute("text-anchor","middle");
+      tx.textContent=(t*100)+"%"; a.appendChild(tx);
+    });
+    // axis lines
+    var xa=document.createElementNS(svgns,"line");
+    xa.setAttribute("class","axisline");xa.setAttribute("x1",ml);xa.setAttribute("x2",ml+plotW);xa.setAttribute("y1",mt+plotH);xa.setAttribute("y2",mt+plotH);a.appendChild(xa);
+    var ya=document.createElementNS(svgns,"line");
+    ya.setAttribute("class","axisline");ya.setAttribute("y1",mt);ya.setAttribute("y2",mt+plotH);ya.setAttribute("x1",ml);ya.setAttribute("x2",ml);a.appendChild(ya);
+    // axis titles
+    var xt=document.createElementNS(svgns,"text");
+    xt.setAttribute("class","axtitle");xt.setAttribute("x",ml+plotW/2);xt.setAttribute("y",H-6);xt.setAttribute("text-anchor","middle");
+    xt.textContent="Prevalence  →"; a.appendChild(xt);
+    var yt=document.createElementNS(svgns,"text");
+    yt.setAttribute("class","axtitle");yt.setAttribute("transform","rotate(-90 14 "+(mt+plotH/2)+")");yt.setAttribute("x",14);yt.setAttribute("y",mt+plotH/2);yt.setAttribute("text-anchor","middle");
+    yt.textContent="Predictive value"; a.appendChild(yt);
+  })();
+
+  function pathFor(fn,se,sp){
+    var d="", n=240;
+    for(var i=0;i<=n;i++){
+      var prev=i/n;
+      var v=fn(prev,se,sp);
+      d += (i?"L":"M")+X(prev).toFixed(2)+" "+Y(v).toFixed(2)+" ";
+    }
+    return d;
+  }
+
+  var prev=document.getElementById("prev"),
+      sens=document.getElementById("sens"),
+      spec=document.getElementById("spec"),
+      overlay=document.getElementById("overlay");
+
+  function labelAt(id,cls,text,x,y,anchor){
+    var svgns="http://www.w3.org/2000/svg";
+    var t=document.getElementById(id);
+    if(!t){ t=document.createElementNS(svgns,"text"); t.id=id; document.getElementById("gLabels").appendChild(t); }
+    t.setAttribute("class","clabel "+cls); t.setAttribute("x",x); t.setAttribute("y",y);
+    t.setAttribute("text-anchor",anchor||"start"); t.textContent=text;
+  }
+
+  function recompute(){
+    var p=parseFloat(prev.value)/100, se=parseFloat(sens.value)/100, sp=parseFloat(spec.value)/100;
+    document.getElementById("prevVal").textContent=parseFloat(prev.value).toFixed(1).replace(/\.0$/,"")+"%";
+    document.getElementById("sensVal").textContent=sens.value+"%";
+    document.getElementById("specVal").textContent=spec.value+"%";
+
+    document.getElementById("curvePPV").setAttribute("d", pathFor(ppv,se,sp));
+    document.getElementById("curveNPV").setAttribute("d", pathFor(npv,se,sp));
+
+    var showOv = overlay.checked;
+    var ppv2El=document.getElementById("curvePPV2"), dotPPV2=document.getElementById("dotPPV2"), chipPPV2=document.getElementById("chipPPV2");
+    ppv2El.style.display = showOv?"":"none";
+    dotPPV2.style.display = showOv?"":"none";
+    chipPPV2.style.display = showOv?"":"none";
+    if(showOv){ ppv2El.setAttribute("d", pathFor(function(pr,s,sp0){return ppv(pr,s,SPEC2);},se,sp)); }
+
+    // marker + dots
+    var vppv=ppv(p,se,sp), vnpv=npv(p,se,sp), vppv2=ppv(p,se,SPEC2);
+    var mx=X(p);
+    var ml_=document.getElementById("mLine");
+    ml_.setAttribute("x1",mx);ml_.setAttribute("x2",mx);ml_.setAttribute("y1",mt);ml_.setAttribute("y2",mt+plotH);
+    place("dotPPV",mx,Y(vppv)); place("dotNPV",mx,Y(vnpv));
+    if(showOv) place("dotPPV2",mx,Y(vppv2));
+
+    // curve end labels (at prevalence ~ 0.97)
+    labelAt("lblPPV","ppv","PPV", X(1)+6, Y(ppv(0.999,se,sp))+4, "start");
+    labelAt("lblNPV","npv","NPV", X(1)+6, Y(npv(0.999,se,sp))+4, "start");
+    var lblP2=document.getElementById("lblPPV2");
+    if(showOv){ labelAt("lblPPV2","ppv2","PPV₂", X(1)+6, Y(ppv(0.999,se,SPEC2))+4, "start"); }
+    else if(lblP2){ lblP2.remove(); }
+
+    // readout
+    document.getElementById("roPPV").textContent=(vppv*100).toFixed(1)+"%";
+    document.getElementById("roNPV").textContent=(vnpv*100).toFixed(1)+"%";
+    document.getElementById("roPrev").textContent=(p*100).toFixed(1)+"%";
+    if(showOv) document.getElementById("roPPV2").textContent=(vppv2*100).toFixed(1)+"%";
+
+    // banner
+    var b=document.getElementById("banner");
+    var steep = p<0.05;
+    b.innerHTML = "At <b>"+(p*100).toFixed(1)+"% prevalence</b>, this "+sens.value+"%/"+spec.value+
+      "% test gives a PPV of <span class='big'>"+(vppv*100).toFixed(1)+"%</span>. "+
+      (steep? "You are on the <b>steep left edge</b> — where most population screening actually happens, and where positives are mostly false alarms. "
+            : "Move the marker toward 0% and watch PPV fall off a cliff. ")+
+      (showOv? "The dashed violet curve raises specificity to 99% — notice how much it <b>lifts PPV</b> for the same prevalence. Try instead nudging <b>sensitivity</b>: it barely moves the curve."
+             : "Now raise <b>specificity</b> vs <b>sensitivity</b> — only specificity meaningfully lifts the PPV curve.");
+  }
+  function place(id,x,y){ var e=document.getElementById(id); e.setAttribute("cx",x); e.setAttribute("cy",y); }
+
+  // dragging the marker along x
+  var svg=document.getElementById("chart"), grab=document.getElementById("grab");
+  function clientToPrev(clientX){
+    var r=svg.getBoundingClientRect();
+    var sx=(clientX-r.left)*(W/r.width);        // to svg coords
+    var p=(sx-ml)/plotW;                         // to 0..1
+    return Math.max(0.001, Math.min(0.999, p));
+  }
+  var dragging=false;
+  function startDrag(e){ dragging=true; grab.setPointerCapture(e.pointerId); moveDrag(e); }
+  function moveDrag(e){ if(!dragging)return; prev.value=(clientToPrev(e.clientX)*100).toFixed(1); recompute(); }
+  function endDrag(){ dragging=false; }
+  grab.addEventListener("pointerdown",startDrag);
+  grab.addEventListener("pointermove",moveDrag);
+  grab.addEventListener("pointerup",endDrag);
+
+  prev.addEventListener("input",recompute);
+  sens.addEventListener("input",recompute);
+  spec.addEventListener("input",recompute);
+  overlay.addEventListener("change",recompute);
+
+  document.getElementById("pLow").addEventListener("click",function(){prev.value=0.5;recompute();});
+  document.getElementById("pMid").addEventListener("click",function(){prev.value=5;recompute();});
+  document.getElementById("pHigh").addEventListener("click",function(){prev.value=30;recompute();});
+
+  recompute();
+})();
+</script>
+</body>
+</html>

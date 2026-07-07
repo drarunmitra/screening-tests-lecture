@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Natural History of Disease &amp; Lead-Time Bias</title>
+<style>
+  :root{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --border:rgba(11,11,11,.12);
+    --latent:#c3c2b7; --dpcp:#2a78d6; --symptom:#eb6834; --death:#d03b3b;
+    --screen:#2a78d6; --symptomBar:#eb6834; --good:#0ca30c;
+    --dpcp-wash:rgba(42,120,214,.12); --symptom-wash:rgba(235,104,52,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+      --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --border:rgba(255,255,255,.14);
+      --latent:#4a4a46; --dpcp:#3987e5; --symptom:#d95926; --death:#e66767;
+      --screen:#3987e5; --symptomBar:#d95926; --good:#0ca30c;
+      --dpcp-wash:rgba(57,135,229,.18); --symptom-wash:rgba(217,89,38,.18);
+    }
+  }
+  :root[data-theme="light"]{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --border:rgba(11,11,11,.12);
+    --latent:#c3c2b7; --dpcp:#2a78d6; --symptom:#eb6834; --death:#d03b3b;
+    --screen:#2a78d6; --symptomBar:#eb6834; --good:#0ca30c;
+    --dpcp-wash:rgba(42,120,214,.12); --symptom-wash:rgba(235,104,52,.12);
+  }
+  :root[data-theme="dark"]{
+    --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --border:rgba(255,255,255,.14);
+    --latent:#4a4a46; --dpcp:#3987e5; --symptom:#d95926; --death:#e66767;
+    --screen:#3987e5; --symptomBar:#d95926; --good:#0ca30c;
+    --dpcp-wash:rgba(57,135,229,.18); --symptom-wash:rgba(217,89,38,.18);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:var(--page); color:var(--ink);
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:20px 18px 48px}
+  header.top{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
+  h1{font-size:1.4rem; margin:.1rem 0 .2rem; letter-spacing:-.01em}
+  .sub{color:var(--ink2); font-size:.95rem; margin:0 0 .2rem; max-width:60ch}
+  .themebtn{
+    border:1px solid var(--border); background:var(--panel); color:var(--ink2);
+    border-radius:999px; padding:6px 12px; font:inherit; font-size:.82rem; cursor:pointer;
+  }
+  .themebtn:hover{color:var(--ink)}
+
+  .tabs{display:flex; gap:6px; margin:18px 0 0; border-bottom:1px solid var(--grid)}
+  .tab{
+    border:none; background:none; color:var(--muted); font:inherit; font-weight:600;
+    padding:10px 14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .tab[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--dpcp)}
+  .tab:hover{color:var(--ink)}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:20px 20px 22px; margin-top:18px;
+  }
+  .panelnote{font-size:.9rem; color:var(--ink2); margin:.2rem 0 0}
+  .legend{display:flex; flex-wrap:wrap; gap:14px; margin:2px 0 14px; font-size:.82rem; color:var(--ink2)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .sw{width:14px; height:14px; border-radius:4px; display:inline-block; flex:none}
+  .sw.line{width:16px; height:0; border-top:2px dashed var(--muted); border-radius:0}
+
+  /* ---- Timeline (Mode 1) ---- */
+  .timeblock{margin-top:6px}
+  .tlabel{font-size:.78rem; color:var(--muted); margin-bottom:2px}
+  .track{
+    position:relative; height:46px; border-radius:9px; overflow:hidden;
+    background:var(--panel); border:1px solid var(--border);
+  }
+  .phase{position:absolute; top:0; bottom:0; display:flex; align-items:center; justify-content:center;
+    font-size:.72rem; font-weight:600; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35); overflow:hidden; white-space:nowrap}
+  .phase.latent{background:var(--latent); color:var(--ink2); text-shadow:none}
+  .phase.dpcp{background:var(--dpcp)}
+  .phase.symptom{background:var(--symptom)}
+  .axis{position:relative; height:34px; margin-top:2px}
+  .tick{position:absolute; transform:translateX(-50%); text-align:center; font-size:.72rem; color:var(--muted); top:0}
+  .tick b{display:block; color:var(--ink2); font-weight:600; font-size:.72rem}
+  .tick::before{content:""; position:absolute; left:50%; top:-4px; width:1px; height:4px; background:var(--muted)}
+
+  /* draggable screen handle sits over the track */
+  .handle-layer{position:relative; height:0}
+  .handle{
+    position:absolute; top:-58px; transform:translateX(-50%);
+    width:0; height:64px; cursor:grab; touch-action:none;
+  }
+  .handle:active{cursor:grabbing}
+  .handle .stem{position:absolute; left:50%; top:12px; width:3px; height:52px; margin-left:-1.5px; background:var(--ink); border-radius:2px}
+  .handle .knob{
+    position:absolute; left:50%; top:-4px; transform:translateX(-50%);
+    background:var(--ink); color:var(--surface); font-size:.7rem; font-weight:700;
+    padding:3px 9px; border-radius:999px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,.25);
+  }
+  .handle:focus-visible{outline:none}
+  .handle:focus-visible .knob{outline:3px solid var(--dpcp); outline-offset:2px}
+
+  .statusline{
+    margin-top:16px; padding:12px 14px; border-radius:10px; font-size:.92rem;
+    border:1px solid var(--border); background:var(--panel);
+  }
+  .statusline b{font-weight:700}
+  .badge{display:inline-block; font-size:.72rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-right:8px; vertical-align:1px}
+  .badge.pos{background:var(--good); color:#fff}
+  .badge.neg{background:var(--death); color:#fff}
+  .badge.warn{background:var(--symptom); color:#fff}
+
+  .controls{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px}
+  .btn{
+    border:1px solid var(--border); background:var(--dpcp); color:#fff; border-radius:9px;
+    padding:9px 16px; font:inherit; font-weight:600; font-size:.88rem; cursor:pointer;
+  }
+  .btn.ghost{background:var(--panel); color:var(--ink2)}
+  .btn.ghost:hover{color:var(--ink)}
+  .btn:hover{filter:brightness(1.05)}
+
+  /* survival comparison */
+  .survival{margin-top:22px; display:none}
+  .survival.show{display:block}
+  .survtitle{font-size:.95rem; font-weight:700; margin:0 0 4px}
+  .survrow{position:relative; height:40px; margin:10px 0; display:flex; align-items:center}
+  .survrow .name{position:absolute; left:0; top:-16px; font-size:.76rem; color:var(--ink2); font-weight:600}
+  .survtrack{position:relative; width:100%; height:26px}
+  .bar{position:absolute; top:0; height:26px; border-radius:6px; display:flex; align-items:center; padding:0 8px;
+    color:#fff; font-size:.74rem; font-weight:700; white-space:nowrap; overflow:hidden}
+  .bar.screen{background:var(--screen)}
+  .bar.symptom{background:var(--symptomBar)}
+  .bar .lead{position:absolute; top:0; bottom:0; left:0;
+    background:repeating-linear-gradient(45deg, rgba(255,255,255,.28) 0 6px, rgba(255,255,255,0) 6px 12px);
+    border-right:2px dashed rgba(255,255,255,.85)}
+  .deathline{position:absolute; top:-8px; bottom:-8px; width:0; border-left:2px dashed var(--death)}
+  .deathlab{position:absolute; top:-26px; transform:translateX(-50%); font-size:.72rem; color:var(--death); font-weight:700; white-space:nowrap}
+  .survcaption{margin-top:26px; font-size:.9rem; color:var(--ink2); background:var(--dpcp-wash);
+    border-left:3px solid var(--dpcp); padding:10px 14px; border-radius:0 8px 8px 0}
+  .survcaption b{color:var(--ink)}
+
+  /* ---- Length-time (Mode 2) ---- */
+  .lt-grid{position:relative; margin-top:6px; padding-top:4px}
+  .screenlines{position:absolute; inset:0; pointer-events:none}
+  .screenline{position:absolute; top:0; bottom:22px; width:0; border-left:2px dashed var(--muted); opacity:.55}
+  .ltrow{position:relative; height:22px; margin:7px 0}
+  .ltbar{position:absolute; top:2px; height:16px; border-radius:5px; opacity:.92}
+  .ltbar.slow{background:var(--dpcp)}
+  .ltbar.fast{background:var(--symptom)}
+  .catch{position:absolute; top:-1px; width:20px; height:20px; margin-left:-10px; border-radius:50%;
+    border:2px solid var(--good); background:transparent; box-sizing:border-box}
+  .catch::after{content:""; position:absolute; left:50%; top:50%; width:8px; height:8px; transform:translate(-50%,-50%);
+    background:var(--good); border-radius:50%}
+  .lt-axis{position:relative; height:22px; margin-top:2px}
+  .lt-tick{position:absolute; transform:translateX(-50%); font-size:.7rem; color:var(--muted); top:2px}
+
+  .sliderrow{display:flex; align-items:center; gap:12px; margin:14px 0 4px; flex-wrap:wrap}
+  .sliderrow label{font-size:.86rem; font-weight:600; color:var(--ink2)}
+  input[type=range]{accent-color:var(--dpcp); width:220px}
+  .ival{font-variant-numeric:tabular-nums; font-weight:700}
+
+  .tiles{display:flex; gap:14px; flex-wrap:wrap; margin-top:18px}
+  .tile{flex:1 1 200px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px}
+  .tile .k{font-size:.78rem; color:var(--muted); margin-bottom:4px}
+  .tile .v{font-size:1.9rem; font-weight:800; letter-spacing:-.02em; line-height:1}
+  .tile .v small{font-size:.9rem; font-weight:600; color:var(--ink2)}
+  .tile.hi .v{color:var(--dpcp)}
+
+  .takeaway{margin-top:18px; font-size:.92rem; color:var(--ink2); background:var(--symptom-wash);
+    border-left:3px solid var(--symptom); padding:10px 14px; border-radius:0 8px 8px 0}
+  .takeaway b{color:var(--ink)}
+
+  .hidden{display:none !important}
+  @media (max-width:560px){
+    .phase{font-size:0} /* hide inline labels on very small screens; legend carries meaning */
+    .tile .v{font-size:1.6rem}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Natural History of Disease &amp; Lead-Time Bias</h1>
+      <p class="sub">Screening only works during the <b>Detectable Pre-Clinical Phase (DPCP)</b>. Drag the screening point to see when a disease can be caught — then compare survival to expose lead-time bias.</p>
+    </div>
+    <button class="themebtn" id="themeToggle" type="button">◐ Theme</button>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Visualisations">
+    <button class="tab" id="tab1" role="tab" aria-selected="true" aria-controls="mode1">① Natural history &amp; lead-time</button>
+    <button class="tab" id="tab2" role="tab" aria-selected="false" aria-controls="mode2">② Length-time bias</button>
+  </div>
+
+  <!-- ============ MODE 1 ============ -->
+  <section class="card" id="mode1" role="tabpanel" aria-labelledby="tab1">
+    <div class="legend">
+      <span><i class="sw" style="background:var(--latent)"></i> Undetectable (latent)</span>
+      <span><i class="sw" style="background:var(--dpcp)"></i> Detectable pre-clinical phase — <b>screenable</b></span>
+      <span><i class="sw" style="background:var(--symptom)"></i> Symptomatic (clinical)</span>
+      <span><i class="sw" style="background:var(--death); border-radius:2px"></i> Outcome / death</span>
+    </div>
+
+    <div class="handle-layer">
+      <div class="handle" id="handle" tabindex="0" role="slider" aria-label="Screening time"
+           aria-valuemin="0" aria-valuemax="8" aria-valuenow="3.5" aria-valuetext="3.5 years">
+        <div class="knob" id="knob">SCREEN</div>
+        <div class="stem"></div>
+      </div>
+    </div>
+
+    <div class="timeblock">
+      <div class="tlabel">Time since biological onset of disease →</div>
+      <div class="track" id="track">
+        <div class="phase latent"  id="pLatent">latent</div>
+        <div class="phase dpcp"     id="pDpcp">DPCP</div>
+        <div class="phase symptom"  id="pSymptom">symptoms</div>
+      </div>
+      <div class="axis" id="axis"></div>
+    </div>
+
+    <div class="statusline" id="status"></div>
+
+    <div class="controls">
+      <button class="btn" id="compareBtn" type="button">Compare survival ▸</button>
+      <button class="btn ghost" id="resetBtn" type="button">Reset</button>
+    </div>
+
+    <div class="survival" id="survival">
+      <p class="survtitle">"Survival from diagnosis" — the same patient, screened vs not screened</p>
+      <div class="survrow">
+        <span class="name">Not screened — diagnosed when symptoms appear</span>
+        <div class="survtrack"><div class="bar symptom" id="barSymptom"></div></div>
+      </div>
+      <div class="survrow">
+        <span class="name">Screened — diagnosed earlier, in the DPCP</span>
+        <div class="survtrack">
+          <div class="bar screen" id="barScreen"></div>
+          <div class="deathline" id="deathline"></div>
+          <div class="deathlab" id="deathlab">✝ death — same moment for both</div>
+        </div>
+      </div>
+      <p class="survcaption" id="survcaption"></p>
+    </div>
+  </section>
+
+  <!-- ============ MODE 2 ============ -->
+  <section class="card hidden" id="mode2" role="tabpanel" aria-labelledby="tab2">
+    <div class="legend">
+      <span><i class="sw" style="background:var(--dpcp)"></i> Slow-growing (long detectable window)</span>
+      <span><i class="sw" style="background:var(--symptom)"></i> Fast-growing (short window)</span>
+      <span><i class="sw line"></i> Screening round</span>
+      <span><i class="sw" style="background:transparent; border:2px solid var(--good)"></i> Caught by screening</span>
+    </div>
+    <p class="panelnote">Each bar is one patient's detectable window. A patient is <b>caught by screening</b> only if a screening round lands inside their window. Move the slider to change how often screening happens.</p>
+
+    <div class="lt-grid" id="ltGrid">
+      <div class="screenlines" id="screenlines"></div>
+      <!-- rows injected -->
+    </div>
+    <div class="lt-axis" id="ltAxis"></div>
+
+    <div class="sliderrow">
+      <label for="interval">Screening every</label>
+      <input type="range" id="interval" min="2" max="8" step="0.5" value="3">
+      <span class="ival"><span id="ivalNum">3</span> months</span>
+    </div>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="k">Whole population — % slow-growing</div>
+        <div class="v" id="popPct">50<small>%</small></div>
+      </div>
+      <div class="tile hi">
+        <div class="k">Screen-detected pool — % slow-growing</div>
+        <div class="v" id="screenPct">–<small>%</small></div>
+      </div>
+      <div class="tile">
+        <div class="k">Cases caught by screening</div>
+        <div class="v" id="caughtN">–</div>
+      </div>
+    </div>
+
+    <p class="takeaway" id="ltTakeaway"></p>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- THEME TOGGLE ---------- */
+  var root = document.documentElement;
+  document.getElementById("themeToggle").addEventListener("click", function(){
+    var cur = root.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : cur === "light" ? "dark"
+             : (matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark");
+    root.setAttribute("data-theme", next);
+  });
+
+  /* ================= MODE 1 ================= */
+  // Timeline model (arbitrary "years"), span 0..10
+  var SPAN = 10;
+  var T = { onset:0, dpcpStart:2, symptomOnset:5, death:8 };
+  var screenT = 3.5;
+
+  var track = document.getElementById("track");
+  var handle = document.getElementById("handle");
+  var knob = document.getElementById("knob");
+
+  function pct(t){ return (t/SPAN)*100; }
+
+  // place phase bands
+  function layoutPhases(){
+    var pl = document.getElementById("pLatent");
+    var pd = document.getElementById("pDpcp");
+    var ps = document.getElementById("pSymptom");
+    pl.style.left = pct(T.onset)+"%";       pl.style.width = pct(T.dpcpStart-T.onset)+"%";
+    pd.style.left = pct(T.dpcpStart)+"%";    pd.style.width = pct(T.symptomOnset-T.dpcpStart)+"%";
+    ps.style.left = pct(T.symptomOnset)+"%"; ps.style.width = pct(T.death-T.symptomOnset)+"%";
+  }
+
+  // axis ticks
+  function layoutAxis(){
+    var axis = document.getElementById("axis");
+    axis.innerHTML = "";
+    var marks = [
+      {t:T.onset,       a:"Biological", b:"onset"},
+      {t:T.dpcpStart,   a:"Detectable", b:"begins"},
+      {t:T.symptomOnset,a:"Symptoms",   b:"appear"},
+      {t:T.death,       a:"Outcome",    b:"/ death"}
+    ];
+    marks.forEach(function(m){
+      var d = document.createElement("div");
+      d.className = "tick";
+      d.style.left = pct(m.t)+"%";
+      d.innerHTML = "<b>"+m.a+"</b>"+m.b;
+      axis.appendChild(d);
+    });
+  }
+
+  function setScreen(t){
+    screenT = Math.max(0, Math.min(T.death, Math.round(t*10)/10));
+    handle.style.left = pct(screenT)+"%";
+    handle.setAttribute("aria-valuenow", screenT);
+    handle.setAttribute("aria-valuetext", screenT.toFixed(1)+" years");
+    updateStatus();
+    if (survivalShown) drawSurvival();
+  }
+
+  function state(){
+    if (screenT < T.dpcpStart) return "latent";
+    if (screenT < T.symptomOnset) return "dpcp";
+    return "symptom";
+  }
+
+  function updateStatus(){
+    var s = state(), el = document.getElementById("status");
+    if (s === "latent"){
+      knob.textContent = "SCREEN";
+      el.innerHTML = '<span class="badge neg">NEGATIVE</span>'+
+        '<b>Too early.</b> The disease exists but is <b>undetectable</b> — no test can find it yet. '+
+        'A screen here gives a <b>false negative</b>. This is why screening cannot begin before the detectable phase.';
+    } else if (s === "dpcp"){
+      knob.textContent = "SCREEN ✓";
+      el.innerHTML = '<span class="badge pos">POSITIVE</span>'+
+        '<b>Detected in the pre-clinical phase.</b> The patient is asymptomatic but the disease is now detectable — '+
+        '<b>this is exactly what screening is for.</b> Diagnosis is advanced by '+
+        '<b>'+(T.symptomOnset - screenT).toFixed(1)+' years</b> versus waiting for symptoms.';
+    } else {
+      knob.textContent = "too late";
+      el.innerHTML = '<span class="badge warn">NOT SCREENING</span>'+
+        '<b>The patient is already symptomatic.</b> Finding disease now is <b>diagnosis, not screening</b> — '+
+        'screening is by definition applied to apparently healthy people.';
+    }
+  }
+
+  /* ----- dragging ----- */
+  function clientToT(clientX){
+    var r = track.getBoundingClientRect();
+    var frac = (clientX - r.left)/r.width;
+    return Math.max(0, Math.min(1, frac))*SPAN;
+  }
+  var dragging=false;
+  handle.addEventListener("pointerdown", function(e){
+    dragging=true; handle.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  handle.addEventListener("pointermove", function(e){
+    if(!dragging) return;
+    setScreen(clientToT(e.clientX));
+  });
+  handle.addEventListener("pointerup", function(){ dragging=false; });
+  // click anywhere on the track jumps the handle
+  track.addEventListener("pointerdown", function(e){
+    if(e.target===handle || handle.contains(e.target)) return;
+    setScreen(clientToT(e.clientX));
+  });
+  // keyboard
+  handle.addEventListener("keydown", function(e){
+    var step = e.shiftKey ? 1 : 0.2;
+    if(e.key==="ArrowLeft"||e.key==="ArrowDown"){ setScreen(screenT-step); e.preventDefault(); }
+    else if(e.key==="ArrowRight"||e.key==="ArrowUp"){ setScreen(screenT+step); e.preventDefault(); }
+    else if(e.key==="Home"){ setScreen(0); e.preventDefault(); }
+    else if(e.key==="End"){ setScreen(T.death); e.preventDefault(); }
+  });
+
+  /* ----- survival comparison ----- */
+  var survivalShown=false;
+  var survival = document.getElementById("survival");
+  var compareBtn = document.getElementById("compareBtn");
+  compareBtn.addEventListener("click", function(){
+    survivalShown = !survivalShown;
+    survival.classList.toggle("show", survivalShown);
+    compareBtn.textContent = survivalShown ? "Hide survival ▾" : "Compare survival ▸";
+    if(survivalShown) drawSurvival();
+  });
+  document.getElementById("resetBtn").addEventListener("click", function(){
+    setScreen(3.5);
+    survivalShown=false; survival.classList.remove("show");
+    compareBtn.textContent="Compare survival ▸";
+  });
+
+  function drawSurvival(){
+    // Both bars are drawn on a time axis 0..death, ending exactly at death.
+    var death = T.death, symp = T.symptomOnset;
+    function L(t){ return (t/death)*100; }               // % within survtrack (0..death)
+    function W(a,b){ return ((b-a)/death)*100; }
+
+    var barSymptom = document.getElementById("barSymptom");
+    var barScreen  = document.getElementById("barScreen");
+    var caption    = document.getElementById("survcaption");
+    var deathline  = document.getElementById("deathline");
+    var deathlab   = document.getElementById("deathlab");
+
+    // reference bar: diagnosed at symptom onset -> death
+    barSymptom.style.left = L(symp)+"%";
+    barSymptom.style.width = W(symp,death)+"%";
+    barSymptom.textContent = (death-symp).toFixed(1)+" yrs";
+
+    deathline.style.left = "100%";
+    deathlab.style.left = "100%";
+
+    var s = state();
+    if (s === "dpcp"){
+      var dx = screenT;                    // screen-detection time
+      barScreen.style.left = L(dx)+"%";
+      barScreen.style.width = W(dx,death)+"%";
+      barScreen.innerHTML = '<span class="lead" style="width:'+((symp-dx)/(death-dx)*100)+'%"></span>'+(death-dx).toFixed(1)+" yrs";
+      var lead = (symp - dx).toFixed(1);
+      caption.innerHTML =
+        'Screen-detected "survival" is <b>'+(death-dx).toFixed(1)+' years</b> vs <b>'+(death-symp).toFixed(1)+
+        ' years</b> without screening — it looks better. But <b>death happened at the same instant</b> (dashed red line). '+
+        'The extra <b>'+lead+' years</b> (hatched) is <b>lead time</b>: earlier knowledge of the diagnosis, <b>not</b> extra life. '+
+        'A screening programme can look successful on "survival from diagnosis" while changing nothing about when people die.';
+    } else {
+      // no valid early detection — screen bar collapses to reference
+      barScreen.style.left = L(symp)+"%";
+      barScreen.style.width = W(symp,death)+"%";
+      barScreen.innerHTML = (death-symp).toFixed(1)+" yrs";
+      caption.innerHTML = (s==="latent")
+        ? 'The screening point is in the <b>undetectable</b> phase, so screening detects nothing — the patient is still diagnosed at symptom onset. Drag the SCREEN handle into the <b>blue DPCP band</b> to create lead time.'
+        : 'The screening point is <b>after symptoms</b>, so there is no early detection — both bars are identical. Drag the SCREEN handle into the <b>blue DPCP band</b>.';
+    }
+  }
+
+  /* ================= MODE 2 ================= */
+  var LT_SPAN = 24; // months
+  // Fixed cohort: 6 slow (long window) + 6 fast (short window). onset & window in months.
+  var CASES = [
+    {onset:1.5, win:8.0, slow:true},
+    {onset:4.0, win:1.2, slow:false},
+    {onset:4.8, win:7.0, slow:true},
+    {onset:7.3, win:0.9, slow:false},
+    {onset:8.1, win:9.0, slow:true},
+    {onset:10.4,win:1.5, slow:false},
+    {onset:11.0,win:8.0, slow:true},
+    {onset:13.6,win:1.1, slow:false},
+    {onset:14.2,win:6.5, slow:true},
+    {onset:16.8,win:1.0, slow:false},
+    {onset:18.0,win:7.0, slow:true},
+    {onset:19.5,win:1.3, slow:false}
+  ];
+  var POP_SLOW = CASES.filter(function(c){return c.slow;}).length;
+
+  var ltGrid = document.getElementById("ltGrid");
+  var rowsBuilt=false;
+
+  function ltPct(m){ return (m/LT_SPAN)*100; }
+
+  function buildRows(){
+    CASES.forEach(function(c,i){
+      var row = document.createElement("div"); row.className="ltrow";
+      var bar = document.createElement("div");
+      bar.className="ltbar "+(c.slow?"slow":"fast");
+      bar.style.left = ltPct(c.onset)+"%";
+      bar.style.width = ltPct(c.win)+"%";
+      row.appendChild(bar);
+      var mark = document.createElement("div"); mark.className="catch hidden";
+      row.appendChild(mark);
+      c._bar=bar; c._mark=mark;
+      ltGrid.appendChild(row);
+    });
+    rowsBuilt=true;
+    // axis
+    var ax = document.getElementById("ltAxis");
+    for(var m=0;m<=LT_SPAN;m+=6){
+      var t=document.createElement("div"); t.className="lt-tick"; t.style.left=ltPct(m)+"%";
+      t.textContent=m+" mo"; ax.appendChild(t);
+    }
+  }
+
+  function runScreening(interval){
+    if(!rowsBuilt) buildRows();
+    // screening rounds
+    var lines = document.getElementById("screenlines");
+    lines.innerHTML="";
+    var screens=[];
+    for(var t=interval;t<LT_SPAN;t+=interval){ screens.push(t);
+      var l=document.createElement("div"); l.className="screenline"; l.style.left=ltPct(t)+"%"; lines.appendChild(l);
+    }
+    // catch logic: earliest screen inside [onset, onset+win]
+    var caught=0, caughtSlow=0;
+    CASES.forEach(function(c){
+      var hit=null;
+      for(var k=0;k<screens.length;k++){
+        if(screens[k]>=c.onset && screens[k]<=c.onset+c.win){ hit=screens[k]; break; }
+      }
+      if(hit!==null){
+        caught++; if(c.slow) caughtSlow++;
+        c._mark.classList.remove("hidden");
+        c._mark.style.left = ltPct(hit)+"%";
+        c._bar.style.opacity="0.95";
+      } else {
+        c._mark.classList.add("hidden");
+        c._bar.style.opacity="0.35";
+      }
+    });
+    // tiles
+    document.getElementById("popPct").innerHTML =
+      Math.round(POP_SLOW/CASES.length*100)+'<small>%</small>';
+    var sp = caught? Math.round(caughtSlow/caught*100) : 0;
+    document.getElementById("screenPct").innerHTML = (caught? sp : "–")+'<small>%</small>';
+    document.getElementById("caughtN").textContent = caught+" / "+CASES.length;
+
+    var tk = document.getElementById("ltTakeaway");
+    if(caught===0){
+      tk.innerHTML = "Screening is so infrequent it catches no one — widen it and watch which cases get caught first.";
+    } else {
+      tk.innerHTML = 'The population is <b>'+Math.round(POP_SLOW/CASES.length*100)+'% slow-growing</b>, but the screen-detected pool is <b>'+
+        sp+'% slow-growing</b>. Screening preferentially catches <b>indolent, long-window</b> disease and misses fast tumours that surface between rounds. '+
+        'So screen-detected patients <b>appear</b> to do better — even if screening changed nothing. That artefact is <b>length-time bias</b>.';
+    }
+  }
+
+  document.getElementById("interval").addEventListener("input", function(e){
+    var v = parseFloat(e.target.value);
+    document.getElementById("ivalNum").textContent = v;
+    runScreening(v);
+  });
+
+  /* ================= TABS ================= */
+  var tab1=document.getElementById("tab1"), tab2=document.getElementById("tab2");
+  var m1=document.getElementById("mode1"), m2=document.getElementById("mode2");
+  var mode2Init=false;
+  function select(which){
+    var one = which===1;
+    tab1.setAttribute("aria-selected",one); tab2.setAttribute("aria-selected",!one);
+    m1.classList.toggle("hidden",!one); m2.classList.toggle("hidden",one);
+    if(!one && !mode2Init){ runScreening(3); mode2Init=true; }
+  }
+  tab1.addEventListener("click",function(){select(1);});
+  tab2.addEventListener("click",function(){select(2);});
+
+  /* ================= INIT ================= */
+  layoutPhases(); layoutAxis(); setScreen(3.5);
+  window.addEventListener("resize", function(){ /* percentages handle layout; nothing needed */ });
+})();
+</script>
+</body>
+</html>

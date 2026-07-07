@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirm the Positive — Series vs Parallel Testing</title>
+<style>
+  :root{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --border:rgba(11,11,11,.12);
+    --tp:#2a78d6; --tn:#1baf7a; --fp:#eb6834; --fn:#e34948;
+    --tp-w:rgba(42,120,214,.14); --tn-w:rgba(27,175,122,.16);
+    --fp-w:rgba(235,104,52,.16); --fn-w:rgba(227,73,72,.15);
+    --accent:#2a78d6; --good:#0ca30c;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+      --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --border:rgba(255,255,255,.14);
+      --tp:#3987e5; --tn:#199e70; --fp:#d95926; --fn:#e66767;
+      --tp-w:rgba(57,135,229,.20); --tn-w:rgba(25,158,112,.22);
+      --fp-w:rgba(217,89,38,.22); --fn-w:rgba(230,103,103,.20);
+      --accent:#3987e5; --good:#0ca30c;
+    }
+  }
+  :root[data-theme="light"]{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --border:rgba(11,11,11,.12);
+    --tp:#2a78d6; --tn:#1baf7a; --fp:#eb6834; --fn:#e34948;
+    --tp-w:rgba(42,120,214,.14); --tn-w:rgba(27,175,122,.16);
+    --fp-w:rgba(235,104,52,.16); --fn-w:rgba(227,73,72,.15);
+    --accent:#2a78d6; --good:#0ca30c;
+  }
+  :root[data-theme="dark"]{
+    --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --border:rgba(255,255,255,.14);
+    --tp:#3987e5; --tn:#199e70; --fp:#d95926; --fn:#e66767;
+    --tp-w:rgba(57,135,229,.20); --tn-w:rgba(25,158,112,.22);
+    --fp-w:rgba(217,89,38,.22); --fn-w:rgba(230,103,103,.20);
+    --accent:#3987e5; --good:#0ca30c;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px 18px 48px}
+  header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.4rem;margin:.1rem 0 .2rem;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:.95rem;margin:0;max-width:72ch}
+  .themebtn{border:1px solid var(--border);background:var(--panel);color:var(--ink2);border-radius:999px;padding:6px 12px;font:inherit;font-size:.82rem;cursor:pointer}
+  .themebtn:hover{color:var(--ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-top:16px}
+
+  .sliders{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .slider label{display:flex;justify-content:space-between;align-items:baseline;font-size:.8rem;font-weight:600;color:var(--ink2);margin-bottom:6px;gap:6px}
+  .slider label .val{font-size:1rem;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  .slider .grp{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  @media (max-width:820px){ .sliders{grid-template-columns:1fr 1fr} }
+
+  .mode{display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .seg button{border:none;background:var(--panel);color:var(--ink2);font:inherit;font-weight:600;font-size:.84rem;padding:8px 14px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  .modehint{font-size:.82rem;color:var(--muted)}
+
+  .main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+  @media (max-width:860px){ .main{grid-template-columns:1fr} }
+
+  .stagebar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .stagebar .step{font-size:.82rem;font-weight:700;color:var(--ink)}
+  .stagebar .step .n{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;align-items:center;justify-content:center;font-size:.72rem;margin-right:6px}
+  .btn{border:1px solid var(--border);background:var(--accent);color:#fff;border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:.84rem;cursor:pointer}
+  .btn.ghost{background:var(--panel);color:var(--ink2)}
+  .btn.ghost:hover{color:var(--ink)}
+  .btn:hover{filter:brightness(1.05)}
+  .btn:disabled{opacity:.45;cursor:default;filter:none}
+
+  .dotgrid{display:grid;grid-template-columns:repeat(40,1fr);gap:2px;margin-top:2px}
+  .dot{aspect-ratio:1;border-radius:2px;background:var(--tn);transition:background-color .5s ease}
+  .dot.tp{background:var(--tp)} .dot.fp{background:var(--fp)}
+  .dot.fn{background:var(--fn)} .dot.tn{background:var(--tn)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:.8rem;color:var(--ink2)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:13px;height:13px;border-radius:3px;flex:none}
+  .gridcap{font-size:.8rem;color:var(--muted);margin:10px 0 0}
+
+  /* stats compare */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .col h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px;font-weight:700}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:8px}
+  .stat .k{font-size:.74rem;color:var(--muted);font-weight:600}
+  .stat .v{font-size:1.55rem;font-weight:800;letter-spacing:-.02em;line-height:1.05;font-variant-numeric:tabular-nums}
+  .stat.ppv .v{color:var(--fp)}
+  .stat.sens .v{color:var(--tp)} .stat.spec .v{color:var(--tn)}
+  .delta{font-size:.78rem;font-weight:700;margin-left:6px}
+  .delta.up{color:var(--good)} .delta.down{color:var(--fn)}
+
+  .banner{margin-top:16px;font-size:.94rem;color:var(--ink2);background:var(--panel);border-left:3px solid var(--accent);padding:11px 14px;border-radius:0 8px 8px 0}
+  .banner b{color:var(--ink)} .banner .big{color:var(--fp);font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Confirm the Positive — Series vs Parallel Testing</h1>
+      <p class="sub">1,000 people are screened (each square = one person). A single screen at low prevalence yields mostly <b>false positives</b>. Run a second test and watch what happens — <b>series</b> (confirm the positives) strips out false alarms and lifts PPV; <b>parallel</b> (positive if either) catches more disease but adds false positives.</p>
+    </div>
+    <button class="themebtn" id="themeToggle" type="button">◐ Theme</button>
+  </header>
+
+  <section class="card">
+    <div class="sliders">
+      <div class="slider">
+        <label><span>Prevalence</span> <span class="val" id="prevVal">5%</span></label>
+        <input type="range" id="prev" min="0.5" max="40" step="0.5" value="5">
+      </div>
+      <div class="slider">
+        <label><span class="grp">Test 1 · Sens</span> <span class="val" id="se1Val">90%</span></label>
+        <input type="range" id="se1" min="50" max="100" step="1" value="90">
+      </div>
+      <div class="slider">
+        <label><span class="grp">Test 1 · Spec</span> <span class="val" id="sp1Val">90%</span></label>
+        <input type="range" id="sp1" min="50" max="100" step="1" value="90">
+      </div>
+      <div class="slider">
+        <label><span class="grp">Test 2 · Sens</span> <span class="val" id="se2Val">98%</span></label>
+        <input type="range" id="se2" min="50" max="100" step="1" value="98">
+      </div>
+      <div class="slider">
+        <label><span class="grp">Test 2 · Spec</span> <span class="val" id="sp2Val">99%</span></label>
+        <input type="range" id="sp2" min="50" max="100" step="1" value="99">
+      </div>
+    </div>
+    <div class="mode">
+      <span class="modehint">Second test strategy:</span>
+      <div class="seg" role="group" aria-label="Testing strategy">
+        <button id="mSeries" type="button" aria-pressed="true">Series — confirm positives</button>
+        <button id="mParallel" type="button" aria-pressed="false">Parallel — positive if either</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="main">
+    <section class="card">
+      <div class="stagebar">
+        <span class="step" id="stepLabel"><span class="n">1</span>After screening test</span>
+        <button class="btn" id="runBtn" type="button" style="margin-left:auto">Run 2nd test ▸</button>
+        <button class="btn ghost" id="resetBtn" type="button">Reset</button>
+      </div>
+      <div class="dotgrid" id="dotgrid"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--tp)"></i> True positive</span>
+        <span><i class="sw" style="background:var(--fp)"></i> False positive</span>
+        <span><i class="sw" style="background:var(--fn)"></i> False negative (missed)</span>
+        <span><i class="sw" style="background:var(--tn)"></i> True negative</span>
+      </div>
+      <p class="gridcap" id="gridCap"></p>
+    </section>
+
+    <section class="card">
+      <div class="cmp">
+        <div class="col">
+          <h3>After screening alone</h3>
+          <div class="stat ppv"><div class="k">PPV</div><div class="v" id="ppv1">–</div></div>
+          <div class="stat sens"><div class="k">Sensitivity</div><div class="v" id="sens1">–</div></div>
+          <div class="stat spec"><div class="k">Specificity</div><div class="v" id="spec1">–</div></div>
+        </div>
+        <div class="col">
+          <h3 id="col2h">After confirmation (series)</h3>
+          <div class="stat ppv"><div class="k">PPV <span class="delta" id="dPPV"></span></div><div class="v" id="ppv2">–</div></div>
+          <div class="stat sens"><div class="k">Sensitivity <span class="delta" id="dSens"></span></div><div class="v" id="sens2">–</div></div>
+          <div class="stat spec"><div class="k">Specificity <span class="delta" id="dSpec"></span></div><div class="v" id="spec2">–</div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="banner" id="banner"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement;
+  document.getElementById("themeToggle").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme");
+    var next=cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"light":"dark");
+    root.setAttribute("data-theme",next);
+  });
+
+  var N=1000, mode="series", stage=1;
+  var grid=document.getElementById("dotgrid"), dots=[];
+  for(var i=0;i<N;i++){var d=document.createElement("div");d.className="dot tn";grid.appendChild(d);dots.push(d);}
+
+  var el=id=>document.getElementById(id);
+  var prev=el("prev"),se1=el("se1"),sp1=el("sp1"),se2=el("se2"),sp2=el("sp2");
+
+  function counts(){
+    var p=+prev.value/100, s1=+se1.value/100, p1=+sp1.value/100, s2=+se2.value/100, p2=+sp2.value/100;
+    var D=Math.round(N*p), H=N-D;
+    var TP1=Math.round(D*s1), FN1=D-TP1;
+    var FP1=Math.round(H*(1-p1)), TN1=H-FP1;
+    // stage-2 subdivisions within each test-1 block
+    var a,b,c,d2;
+    if(mode==="series"){
+      a=Math.round(TP1*s2);        // TP1 -> stay TP
+      b=Math.round(FP1*(1-p2));    // FP1 -> stay FP
+      c=0; d2=0;                   // screen-negatives NOT retested
+    } else {
+      a=TP1; b=FP1;                // already positive -> final positive
+      c=Math.round(FN1*s2);        // FN1 -> become TP
+      d2=Math.round(TN1*(1-p2));   // TN1 -> become FP
+    }
+    return {D:D,H:H,TP1:TP1,FN1:FN1,FP1:FP1,TN1:TN1,a:a,b:b,c:c,d2:d2,
+            s2:s2,p2:p2,p:p,s1:s1,p1:p1};
+  }
+
+  // build per-dot class arrays for stage 1 and stage 2, in block order TP1,FP1,FN1,TN1
+  function classArrays(k){
+    var s1arr=[], s2arr=[];
+    function push(n,c1,c2){ for(var i=0;i<n;i++){s1arr.push(c1);s2arr.push(c2);} }
+    // TP1 block
+    push(k.a,       "tp","tp");
+    push(k.TP1-k.a, "tp","fn");        // series: failed confirm -> FN; parallel: a=TP1 so none
+    // FP1 block
+    push(k.b,       "fp","fp");
+    push(k.FP1-k.b, "fp","tn");        // series: cleared -> TN
+    // FN1 block
+    push(k.c,       "fn","tp");        // parallel: caught by test2
+    push(k.FN1-k.c, "fn","fn");
+    // TN1 block
+    push(k.d2,      "tn","fp");        // parallel: false positive on test2
+    push(k.TN1-k.d2,"tn","tn");
+    return {s1:s1arr,s2:s2arr};
+  }
+
+  function render(){
+    var k=counts();
+    var ca=classArrays(k);
+    var arr = stage===1? ca.s1 : ca.s2;
+    for(var i=0;i<N;i++){ if(dots[i]._c!==arr[i]){ dots[i].className="dot "+arr[i]; dots[i]._c=arr[i]; } }
+
+    // stage-1 measures
+    var PPV1 = (k.TP1+k.FP1)? k.TP1/(k.TP1+k.FP1)*100 : 0;
+    var Sens1 = k.D? k.TP1/k.D*100:0, Spec1 = k.H? k.TN1/k.H*100:0;
+    // final counts from s2 array
+    var f={tp:0,fp:0,fn:0,tn:0}; ca.s2.forEach(function(c){f[c]++;});
+    var PPVf = (f.tp+f.fp)? f.tp/(f.tp+f.fp)*100:0;
+    var Sensf = k.D? f.tp/k.D*100:0, Specf = k.H? f.tn/k.H*100:0;
+
+    el("ppv1").textContent=PPV1.toFixed(1)+"%";
+    el("sens1").textContent=Sens1.toFixed(0)+"%";
+    el("spec1").textContent=Spec1.toFixed(0)+"%";
+    el("ppv2").textContent=PPVf.toFixed(1)+"%";
+    el("sens2").textContent=Sensf.toFixed(1)+"%";
+    el("spec2").textContent=Specf.toFixed(1)+"%";
+
+    delta("dPPV",PPVf-PPV1); delta("dSens",Sensf-Sens1); delta("dSpec",Specf-Spec1);
+    el("col2h").textContent=(mode==="series"?"After confirmation (series)":"After both tests (parallel)");
+
+    // labels + captions
+    el("prevVal").textContent=(+prev.value)+"%";
+    el("se1Val").textContent=se1.value+"%"; el("sp1Val").textContent=sp1.value+"%";
+    el("se2Val").textContent=se2.value+"%"; el("sp2Val").textContent=sp2.value+"%";
+    el("stepLabel").innerHTML = stage===1
+      ? '<span class="n">1</span>After screening test'
+      : '<span class="n">2</span>After 2nd test ('+mode+')';
+
+    var posNow = stage===1? (k.TP1+k.FP1) : (f.tp+f.fp);
+    var tpNow  = stage===1? k.TP1 : f.tp;
+    el("gridCap").innerHTML = "<b>"+posNow+"</b> of 1,000 now test positive — of those, <b>"+
+      (posNow?Math.round(tpNow/posNow*100):0)+"%</b> ("+tpNow+"/"+posNow+") truly have the disease.";
+
+    // banner
+    var b=el("banner");
+    if(mode==="series"){
+      b.innerHTML = "<b>Series testing:</b> only the "+(k.TP1+k.FP1)+" screen-positives are retested; a case is called positive only if <b>both</b> tests agree. "+
+        "PPV rises from <b>"+PPV1.toFixed(0)+"%</b> to <span class='big'>"+PPVf.toFixed(0)+"%</span> as false positives are cleared — but combined sensitivity falls to <b>"+Sensf.toFixed(0)+"%</b> (a few true cases fail the 2nd test). "+
+        "This is the rule: <b>confirm a positive screen</b> before acting.";
+    } else {
+      b.innerHTML = "<b>Parallel testing:</b> everyone gets both tests and is positive if <b>either</b> is positive. "+
+        "Combined sensitivity rises to <b>"+Sensf.toFixed(0)+"%</b> (you miss fewer cases) — but specificity and PPV <b>fall</b> (PPV "+PPV1.toFixed(0)+"% → <span class='big'>"+PPVf.toFixed(0)+"%</span>). "+
+        "Used when missing a case is unacceptable and false alarms are tolerable.";
+    }
+  }
+  function delta(id,dv){
+    var e=el(id);
+    if(Math.abs(dv)<0.5){ e.textContent=""; return; }
+    e.textContent=(dv>0?"▲ +":"▼ ")+dv.toFixed(0)+"pp";
+    e.className="delta "+(dv>0?"up":"down");
+  }
+
+  function setStage(s){ stage=s; el("runBtn").disabled=(s===2); render(); }
+
+  [prev,se1,sp1,se2,sp2].forEach(function(s){ s.addEventListener("input",function(){ render(); }); });
+  el("runBtn").addEventListener("click",function(){ setStage(2); });
+  el("resetBtn").addEventListener("click",function(){ setStage(1); });
+  el("mSeries").addEventListener("click",function(){ mode="series"; el("mSeries").setAttribute("aria-pressed","true"); el("mParallel").setAttribute("aria-pressed","false"); render(); });
+  el("mParallel").addEventListener("click",function(){ mode="parallel"; el("mParallel").setAttribute("aria-pressed","true"); el("mSeries").setAttribute("aria-pressed","false"); render(); });
+
+  setStage(1);
+})();
+</script>
+</body>
+</html>

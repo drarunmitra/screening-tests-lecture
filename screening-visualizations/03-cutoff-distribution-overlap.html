@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where to Draw the Line — Cut-off, Sensitivity &amp; Specificity</title>
+<style>
+  :root{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.12);
+    --tp:#2a78d6; --tn:#1baf7a; --fp:#eb6834; --fn:#e34948;
+    --tp-w:rgba(42,120,214,.14); --tn-w:rgba(27,175,122,.16);
+    --fp-w:rgba(235,104,52,.16); --fn-w:rgba(227,73,72,.15);
+    --accent:#2a78d6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+      --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.14);
+      --tp:#3987e5; --tn:#199e70; --fp:#d95926; --fn:#e66767;
+      --tp-w:rgba(57,135,229,.20); --tn-w:rgba(25,158,112,.22);
+      --fp-w:rgba(217,89,38,.22); --fn-w:rgba(230,103,103,.20);
+      --accent:#3987e5;
+    }
+  }
+  :root[data-theme="light"]{
+    --surface:#fcfcfb; --panel:#ffffff; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.12);
+    --tp:#2a78d6; --tn:#1baf7a; --fp:#eb6834; --fn:#e34948;
+    --tp-w:rgba(42,120,214,.14); --tn-w:rgba(27,175,122,.16);
+    --fp-w:rgba(235,104,52,.16); --fn-w:rgba(227,73,72,.15); --accent:#2a78d6;
+  }
+  :root[data-theme="dark"]{
+    --surface:#1a1a19; --panel:#222220; --page:#0d0d0d;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.14);
+    --tp:#3987e5; --tn:#199e70; --fp:#d95926; --fn:#e66767;
+    --tp-w:rgba(57,135,229,.20); --tn-w:rgba(25,158,112,.22);
+    --fp-w:rgba(217,89,38,.22); --fn-w:rgba(230,103,103,.20); --accent:#3987e5;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:20px 18px 48px}
+  header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.4rem;margin:.1rem 0 .2rem;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:.95rem;margin:0;max-width:72ch}
+  .themebtn{border:1px solid var(--border);background:var(--panel);color:var(--ink2);border-radius:999px;padding:6px 12px;font:inherit;font-size:.82rem;cursor:pointer}
+  .themebtn:hover{color:var(--ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:16px}
+
+  svg{display:block;width:100%;height:auto;touch-action:none}
+  .region{fill-opacity:.5;stroke:none}
+  .region.tp{fill:var(--tp)} .region.fp{fill:var(--fp)} .region.fn{fill:var(--fn)} .region.tn{fill:var(--tn)}
+  .curveline{fill:none;stroke:var(--ink2);stroke-width:1.6}
+  .baseline{stroke:var(--axis);stroke-width:1.5}
+  .tick{fill:var(--muted);font-size:11px}
+  .axtitle{fill:var(--ink2);font-size:12px;font-weight:600}
+  .distlabel{font-size:12px;font-weight:700;fill:var(--ink2)}
+  .cut{stroke:var(--ink);stroke-width:2}
+  .cutknob{fill:var(--ink)} .cutknob text{fill:var(--surface);font-size:11px;font-weight:700}
+  .grabzone{fill:transparent;cursor:ew-resize}
+
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .slider label{display:flex;justify-content:space-between;align-items:baseline;font-size:.84rem;font-weight:600;color:var(--ink2);margin-bottom:6px}
+  .slider label .val{font-size:1rem;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  @media (max-width:680px){ .controls{grid-template-columns:1fr} }
+  .presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  .pl{font-size:.82rem;color:var(--muted)}
+  .btn{border:1px solid var(--border);background:var(--accent);color:#fff;border-radius:9px;padding:8px 13px;font:inherit;font-weight:600;font-size:.82rem;cursor:pointer}
+  .btn.ghost{background:var(--panel);color:var(--ink2)} .btn.ghost:hover{color:var(--ink)}
+  .btn:hover{filter:brightness(1.05)}
+
+  .grades{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .metric{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .metric .k{font-size:.78rem;color:var(--muted);font-weight:600}
+  .metric .v{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+  .metric.sens .v{color:var(--tp)} .metric.spec .v{color:var(--tn)}
+  .metric .mn{font-size:.76rem;color:var(--ink2);margin-top:5px}
+  .metric .mn b{color:var(--ink)}
+
+  .side{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;margin-top:12px}
+  table.tt{border-collapse:separate;border-spacing:3px;font-variant-numeric:tabular-nums}
+  table.tt th,table.tt td{padding:6px 8px;text-align:center;border-radius:7px;font-size:.9rem}
+  table.tt th{font-size:.72rem;color:var(--ink2);font-weight:700}
+  .cell .lab{font-size:.62rem;font-weight:700;display:block;opacity:.85}
+  .cell .num{font-size:1.05rem;font-weight:800}
+  .cell.tp{background:var(--tp-w)} .cell.fp{background:var(--fp-w)} .cell.fn{background:var(--fn-w)} .cell.tn{background:var(--tn-w)}
+  .cell.tp .lab{color:var(--tp)} .cell.fp .lab{color:var(--fp)} .cell.fn .lab{color:var(--fn)} .cell.tn .lab{color:var(--tn)}
+  .rowh{font-size:.72rem;color:var(--ink2);font-weight:700;text-align:right;padding-right:8px}
+  .ttnote{font-size:.74rem;color:var(--muted);margin-top:6px}
+  .roc{font-size:.84rem;color:var(--ink2);align-self:center}
+  .roc b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+  .banner{margin-top:16px;font-size:.94rem;color:var(--ink2);background:var(--panel);border-left:3px solid var(--accent);padding:11px 14px;border-radius:0 8px 8px 0}
+  .banner b{color:var(--ink)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 2px 0;font-size:.8rem;color:var(--ink2)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:13px;height:13px;border-radius:3px;flex:none;opacity:.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Where to Draw the Line — Cut-off, Sensitivity &amp; Specificity</h1>
+      <p class="sub">A test gives a number (say a biomarker level). Healthy and diseased people overlap. Wherever you set the <b>cut-off</b>, you trade sensitivity against specificity — you cannot maximise both unless the two groups barely overlap. Drag the line and watch.</p>
+    </div>
+    <button class="themebtn" id="themeToggle" type="button">◐ Theme</button>
+  </header>
+
+  <section class="card">
+    <svg id="chart" viewBox="0 0 600 340" role="img" aria-label="Overlapping distributions of healthy and diseased with a cut-off">
+      <g id="regions"></g>
+      <path id="lineH" class="curveline"/>
+      <path id="lineD" class="curveline"/>
+      <g id="axes"></g>
+      <g id="labels"></g>
+      <line id="cutLine" class="cut"/>
+      <g id="cutKnob" class="cutknob"><rect x="0" y="0" width="46" height="18" rx="9"/><text x="23" y="13" text-anchor="middle">cut-off</text></g>
+      <rect id="grab" class="grabzone" x="0" y="0" width="600" height="300"/>
+    </svg>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--tn)"></i> TN — healthy, below cut-off</span>
+      <span><i class="sw" style="background:var(--fp)"></i> FP — healthy, above cut-off</span>
+      <span><i class="sw" style="background:var(--fn)"></i> FN — diseased, below cut-off</span>
+      <span><i class="sw" style="background:var(--tp)"></i> TP — diseased, above cut-off</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="controls">
+      <div class="slider">
+        <label for="cut">Cut-off value <span class="val" id="cutVal">50</span></label>
+        <input type="range" id="cut" min="8" max="92" step="1" value="50">
+      </div>
+      <div class="slider">
+        <label for="sep">Test discrimination — how different the diseased are <span class="val" id="sepVal">Good</span></label>
+        <input type="range" id="sep" min="12" max="56" step="1" value="31">
+      </div>
+    </div>
+    <div class="presets">
+      <span class="pl">Cut-off strategy:</span>
+      <button class="btn" id="pRuleOut" type="button">Rule-out / screening (high sensitivity)</button>
+      <button class="btn ghost" id="pBalanced" type="button">Balanced</button>
+      <button class="btn" id="pRuleIn" type="button">Rule-in / confirm (high specificity)</button>
+    </div>
+  </section>
+
+  <div class="card">
+    <div class="grades">
+      <div class="metric sens">
+        <div class="k">Sensitivity</div><div class="v" id="vSens">90.9%</div>
+        <div class="mn"><b>SnNOUT</b> — a highly sensitive test, when Negative, rules OUT.</div>
+      </div>
+      <div class="metric spec">
+        <div class="k">Specificity</div><div class="v" id="vSpec">89.4%</div>
+        <div class="mn"><b>SpPIN</b> — a highly specific test, when Positive, rules IN.</div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div>
+        <table class="tt">
+          <tr><th></th><th>Disease +</th><th>Disease −</th></tr>
+          <tr>
+            <td class="rowh">Test +</td>
+            <td class="cell tp"><span class="lab">TP</span><span class="num" id="cTP">909</span></td>
+            <td class="cell fp"><span class="lab">FP</span><span class="num" id="cFP">106</span></td>
+          </tr>
+          <tr>
+            <td class="rowh">Test −</td>
+            <td class="cell fn"><span class="lab">FN</span><span class="num" id="cFN">91</span></td>
+            <td class="cell tn"><span class="lab">TN</span><span class="num" id="cTN">894</span></td>
+          </tr>
+        </table>
+        <p class="ttnote">per 1,000 diseased &amp; 1,000 healthy (equal groups isolate the test's own properties — independent of prevalence)</p>
+      </div>
+      <div class="roc" id="rocNote"></div>
+    </div>
+  </div>
+
+  <p class="banner" id="banner"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement;
+  document.getElementById("themeToggle").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme");
+    var next=cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"light":"dark");
+    root.setAttribute("data-theme",next);
+  });
+
+  var W=600,H=340, ml=16,mr=16,mt=18,mb=42;
+  var plotW=W-ml-mr, plotH=H-mt-mb, base=mt+plotH, amp=plotH*0.92;
+  var sigma=12, muH=35;
+  function X(v){ return ml + (v/100)*plotW; }
+  function Yv(d){ return base - d*amp; }                 // density 0..1 -> y
+  function densH(x){ return Math.exp(-0.5*Math.pow((x-muH)/sigma,2)); }
+  var muD=66;
+  function densD(x){ return Math.exp(-0.5*Math.pow((x-muD)/sigma,2)); }
+
+  function erf(x){ var s=x<0?-1:1; x=Math.abs(x); var t=1/(1+0.3275911*x);
+    var y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);
+    return s*y; }
+  function cdf(x,mu){ return 0.5*(1+erf((x-mu)/(sigma*Math.SQRT2))); }
+
+  var svgns="http://www.w3.org/2000/svg";
+  function mk(tag,cls){ var e=document.createElementNS(svgns,tag); if(cls)e.setAttribute("class",cls); return e; }
+  var regions=document.getElementById("regions");
+  var pTN=mk("path","region tn"),pFP=mk("path","region fp"),pFN=mk("path","region fn"),pTP=mk("path","region tp");
+  regions.appendChild(pTN);regions.appendChild(pFP);regions.appendChild(pFN);regions.appendChild(pTP);
+
+  // static axes
+  (function(){
+    var ax=document.getElementById("axes");
+    var bl=mk("line","baseline"); bl.setAttribute("x1",ml);bl.setAttribute("x2",ml+plotW);bl.setAttribute("y1",base);bl.setAttribute("y2",base); ax.appendChild(bl);
+    for(var v=0;v<=100;v+=20){ var t=mk("text","tick"); t.setAttribute("x",X(v));t.setAttribute("y",base+16);t.setAttribute("text-anchor","middle");t.textContent=v; ax.appendChild(t); }
+    var xt=mk("text","axtitle"); xt.setAttribute("x",ml+plotW/2);xt.setAttribute("y",H-6);xt.setAttribute("text-anchor","middle");xt.textContent="Test value  →"; ax.appendChild(xt);
+  })();
+
+  function areaPath(dens,x0,x1){
+    var d="M "+X(x0).toFixed(1)+" "+base.toFixed(1)+" ";
+    for(var x=x0;x<=x1+1e-9;x+=0.5){ d+="L "+X(x).toFixed(1)+" "+Yv(dens(x)).toFixed(1)+" "; }
+    d+="L "+X(x1).toFixed(1)+" "+base.toFixed(1)+" Z";
+    return d;
+  }
+  function linePath(dens){
+    var d="M "+X(0).toFixed(1)+" "+Yv(dens(0)).toFixed(1)+" ";
+    for(var x=0.5;x<=100+1e-9;x+=0.5){ d+="L "+X(x).toFixed(1)+" "+Yv(dens(x)).toFixed(1)+" "; }
+    return d;
+  }
+
+  var cut=document.getElementById("cut"), sep=document.getElementById("sep");
+
+  function labelDist(id,text,x){
+    var t=document.getElementById(id);
+    if(!t){ t=mk("text","distlabel"); t.id=id; document.getElementById("labels").appendChild(t); }
+    t.setAttribute("x",X(x));t.setAttribute("y",Yv(1)-6);t.setAttribute("text-anchor","middle");t.textContent=text;
+  }
+
+  function sepWord(g){ return g<20?"Poor (big overlap)":g<30?"Fair":g<42?"Good":"Excellent (little overlap)"; }
+
+  function recompute(){
+    var g=+sep.value; muD=muH+g;
+    var c=+cut.value;
+
+    // curves + regions
+    document.getElementById("lineH").setAttribute("d",linePath(densH));
+    document.getElementById("lineD").setAttribute("d",linePath(densD));
+    pTN.setAttribute("d",areaPath(densH,0,c));
+    pFP.setAttribute("d",areaPath(densH,c,100));
+    pFN.setAttribute("d",areaPath(densD,0,c));
+    pTP.setAttribute("d",areaPath(densD,c,100));
+
+    labelDist("lH","Healthy",muH);
+    labelDist("lD","Diseased",muD);
+
+    // cut line + knob
+    var cx=X(c);
+    var cl=document.getElementById("cutLine");
+    cl.setAttribute("x1",cx);cl.setAttribute("x2",cx);cl.setAttribute("y1",mt-2);cl.setAttribute("y2",base);
+    var knob=document.getElementById("cutKnob");
+    var kx=Math.max(ml, Math.min(ml+plotW-46, cx-23));
+    knob.setAttribute("transform","translate("+kx+","+(mt-12)+")");
+
+    // measures
+    var sens=1-cdf(c,muD), spec=cdf(c,muH);
+    document.getElementById("vSens").textContent=(sens*100).toFixed(1)+"%";
+    document.getElementById("vSpec").textContent=(spec*100).toFixed(1)+"%";
+    document.getElementById("cutVal").textContent=c;
+    document.getElementById("sepVal").textContent=sepWord(g);
+
+    var TP=Math.round(sens*1000), FN=1000-TP, TN=Math.round(spec*1000), FP=1000-TN;
+    set("cTP",TP);set("cFN",FN);set("cTN",TN);set("cFP",FP);
+
+    // ROC point
+    document.getElementById("rocNote").innerHTML =
+      "<b>ROC point</b> at this cut-off: (1−Spec, Sens) = (<b>"+((1-spec)*100).toFixed(0)+"%</b>, <b>"+(sens*100).toFixed(0)+"%</b>).<br>"+
+      "Sweep the cut-off across every value and this point traces out the <b>ROC curve</b> — the subject of the next lecture.";
+
+    // banner
+    var b=document.getElementById("banner");
+    if(sens-spec>0.12){
+      b.innerHTML="<b>Low cut-off.</b> Sensitivity is high ("+(sens*100).toFixed(0)+"%) — few diseased are missed, so a <b>negative result reliably rules disease out (SnNOUT)</b>. The price: specificity drops to "+(spec*100).toFixed(0)+"% and false positives (orange) pile up. This is where a <b>screening</b> test sits.";
+    } else if(spec-sens>0.12){
+      b.innerHTML="<b>High cut-off.</b> Specificity is high ("+(spec*100).toFixed(0)+"%) — few healthy are flagged, so a <b>positive result reliably rules disease in (SpPIN)</b>. The price: sensitivity falls to "+(sens*100).toFixed(0)+"% and more true cases (red) are missed. This is where a <b>confirmatory</b> test sits.";
+    } else {
+      b.innerHTML="<b>Balanced cut-off.</b> Sensitivity "+(sens*100).toFixed(0)+"% and specificity "+(spec*100).toFixed(0)+"% are roughly matched. Now drag the <b>discrimination</b> slider: as the two groups separate, the overlap shrinks and you can push <b>both</b> higher at once — a better test, not just a different cut-off.";
+    }
+  }
+  function set(id,v){ document.getElementById(id).textContent=v; }
+
+  // dragging
+  var svg=document.getElementById("chart"), grab=document.getElementById("grab");
+  function clientToVal(clientX){
+    var r=svg.getBoundingClientRect();
+    var sx=(clientX-r.left)*(W/r.width);
+    var v=(sx-ml)/plotW*100;
+    return Math.max(8,Math.min(92,Math.round(v)));
+  }
+  var dragging=false;
+  grab.addEventListener("pointerdown",function(e){dragging=true;grab.setPointerCapture(e.pointerId);cut.value=clientToVal(e.clientX);recompute();});
+  grab.addEventListener("pointermove",function(e){if(!dragging)return;cut.value=clientToVal(e.clientX);recompute();});
+  grab.addEventListener("pointerup",function(){dragging=false;});
+
+  cut.addEventListener("input",recompute);
+  sep.addEventListener("input",recompute);
+  document.getElementById("pRuleOut").addEventListener("click",function(){cut.value=Math.round(muH+ (+sep.value)*0.30);recompute();});
+  document.getElementById("pBalanced").addEventListener("click",function(){cut.value=Math.round(muH+(+sep.value)/2);recompute();});
+  document.getElementById("pRuleIn").addEventListener("click",function(){cut.value=Math.round(muH+(+sep.value)*0.70);recompute();});
+
+  recompute();
+})();
+</script>
+</body>
+</html>
